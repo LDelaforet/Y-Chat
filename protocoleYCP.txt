@@ -1,0 +1,61 @@
+Principe:
+Le protocole YCP est un protocole s'apparentant fortement au protocole IRC mais comportant quelques différences, principalement par soucis de facilité de compréhension
+A chaque connection, l'utilisateur pourra récuperer les messages d'un salon, les messages sont récuperés par groupe de 20
+
+Tout serveur est muni d'un salon de commandes destiné uniquement aux modérateurs / administrateurs, sur ce salon.
+
+Un compte administrateur sera a spécifier, il sera essentiel a des fins de modération, un administrateur peut promouvoir des utilisateurs modérateurs
+
+Liste des commandes:
+
+Lexique:
+    Erreur: problème fatal, fait fermer la connection
+    Avertissement: problème non fatal, peut être réglé
+
+Client <-> Serveur:
+    * PING: idem qu'en IRC, attend un PONG de la part de l'interlocuteur avant la fin du timeout, sert a déterminer la vitesse
+    PONG: Réponse donnée après un PING, doit etre envoyé au plus vite
+
+Serveur -> Client:
+    ASKLOGIN: Demande au client de se connecter
+    ERROR erreur: Envoie une erreur au client
+    WARNING avertissement: envoie un avertissement au client
+    PRIVMSG username sender timestamp contenu_du_message: Envoie un message a l'utilisateur pour le salon privé donné
+    MSG salon sender timestamp contenu_du_message: Envoie un message a l'utilisateur pour le salon donné
+    GETOUT utilisateur: force l'utilisateur a se deconnecter
+    SUCCESS: signifie la réussite de l'operation
+    USERID utilisateur id: donne l'id d'un utilisateur 
+    FRIEND id: donne l'id d'un ami
+    CHANNEL channel: donne le nom d'un channel
+    CHANUPDATE: demande de wipe la liste des channels car y'a une maj
+
+Client -> Serveur:
+    * USER utilisateur: Envoie un nom d'utilisateur au serveur pour se connecter ou s'inscrire
+    * PASS mot de passe: Envoie un nom d'utilisateur au serveur pour se connecter ou s'inscrire
+    * NEWMSG salon contenu_du_message: Envoie un message dans le salon publique donné
+    * LISTMSG salon offset: Demande la liste des messages du salon publique donné
+    * QUIT: Initie une fermeture côté client
+    * ASKFRIEND utilisateur: envoie une demande d'ami a un utilisateur, si une demande a été envoyée dans l'autre sens, elle sera acceptée
+    * ACCEPTFRIEND utilisateur: accepte la demande d'ami d'un utilisateur
+    * REJECTFRIEND utilisateur: refuse la demande d'ami d'un utilisateur
+    * FRIENDLIST: Affiche sa liste d'amis
+    * NEWPRIVMSG utilisateur message: envoie un message privé a un utilisateur
+    * LISTPRIVMSG utilisateur offset: Demande la liste des messages du salon donné 
+    * GETID: Retourne l'id de l'utilisateur
+    * GETUSERID utilisateur: Retourne l'id d'un utilisateur
+    * USERNAME id: donne le nom d'utilisateur d'un utilisateur selon son id
+    * CHANNELLIST: donne la liste des channels
+
+    * LOGIN: Se connecte avec l'username/le mdp donnés
+    * REGISTER: Crée un nouveau compte avc l'username/le mdp donnés
+
+Administrateur -> Salon commandes:
+    PROMOTE utilisateur: Promut un utilisateur au rang de modérateur
+    UNPROMOTE utilisateur: Retire le role de modérateur a un utilisateur
+    WIPEMODS: Retire toutes les permissions modérateur
+
+Modérateur -> Salon commandes:
+    NEWCHAN nom: crée un nouveau salon avec le nom donné
+    RENCHAN ancien_nom nouveau_nom: renomme un salon
+    DELCHAN nom: supprime un salon
+    WIPECHAN nom: supprime les messages d'un salon
