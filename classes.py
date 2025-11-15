@@ -7,15 +7,29 @@ class User():
         self.tempUser = ""
         self.tempPasswd = ""
         self.id = None
-        self.username = ""
+        self.username = "NONE"
+        self.pingSended = False
         pass
 
-    def desactivate(self):
+    def disconnect(self):
+        # Mark inactive and close socket safely; log for debugging
         self.isActive = False
-        self.socket.close()
+        try:
+            peer = None
+            try:
+                peer = self.socket.getpeername()
+            except Exception:
+                pass
+            print(f"Disconnecting user {self.username} socket={peer}")
+            self.socket.close()
+        except Exception as e:
+            print("Erreur lors de la deconnexion du socket:", e)
     
-    def check_if_alive(self):
-        pass
+    def toggle_pingSended(self):
+        self.pingSended = not self.pingSended
+    
+    def is_pingSended(self):
+        return self.pingSended
 
     def set_username(self, username):
         self.username = username
@@ -29,7 +43,16 @@ class User():
     def set_tempPasswd(self, tempPasswd):
         self.tempPasswd = tempPasswd
     
-
+    def send(self, message):
+        try:
+            # Ensure each message is terminated so client can split by lines
+            self.socket.sendall((message + "\r\n").encode())
+        except Exception:
+            # If sending fails, consider the user disconnected
+            try:
+                self.socket.close()
+            except:
+                pass
     
 
     def get_username(self):

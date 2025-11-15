@@ -1,31 +1,50 @@
+import bcrypt
 import sqlite3
 
 conn = sqlite3.connect("database.db")
 db = conn.cursor()
 
+def password_hasher(password: str) -> bytes:
+    password_bytes = password.encode()
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(password_bytes, salt)
+
+def password_check(password: str, hashed: bytes) -> bool:
+    return bcrypt.checkpw(password.encode(), hashed)
+
+
 def register(username, password, id=None):
-    if id == None:
+    passwordHash = password_hasher(password)  # fixed
+    if id is None:
         db.execute("""
             INSERT INTO users (username, password, is_moderator)
             VALUES (?, ?, false)
-        """, (username, password))
+        """, (username, passwordHash))
     else:
         db.execute("""
             INSERT INTO users (id, username, password, is_moderator)
             VALUES (?, ?, ?, false)
-        """, (id, username, password))
+        """, (id, username, passwordHash))
     conn.commit()
-    return(db.lastrowid)
+    return db.lastrowid
 
 def connect(username, password):
     db.execute("""
-        SELECT id FROM users
-        WHERE username = ? AND password = ?
-    """, (username, password))
+        SELECT id, password FROM users
+        WHERE username = ?
+    """, (username,))
     
-    result = db.fetchone()
-    if result:
-        return result[0]
+    row = db.fetchone()
+    if row is None:
+        return None
+    
+    user_id, password_hash = row
+    
+    if isinstance(password_hash, str):
+        password_hash = password_hash.encode()
+
+    if password_check(password, password_hash):
+        return user_id
     else:
         return None
 
@@ -206,21 +225,32 @@ def list_friendships_ids(userId):
 
     return [row[0] for row in results]
 
+def who_asked_me(userId):
+    db.execute("""
+        SELECT id FROM friendships
+        WHERE friend_id = ?
+        WHERE is_pending = true
+    """, (userId))
+
+    results = db.fetchall()
+
+    if not results:
+        return []
+
+    return [row[0] for row in results]
+
 def get_user_id_by_friendship(friendshipId):
+    # Récupérer les deux ids en une seule requête et vérifier l'existence
     db.execute("""
-        SELECT user_id FROM friendships
+        SELECT user_id, friend_id FROM friendships
         WHERE id = ?
     """, (friendshipId,))
 
-    userId = db.fetchone()[0]
+    result = db.fetchone()
+    if not result:
+        return None
 
-    db.execute("""
-        SELECT friend_id FROM friendships
-        WHERE id = ?
-    """, (friendshipId,))
-
-    friendId = db.fetchone()[0]
-
+    userId, friendId = result
     return [userId, friendId]
 
 def get_private_channel_id_by_friendship_id(friendshipId):
@@ -244,10 +274,10 @@ def send_message(senderId, channelId, content):
 
 def read_messages(channelId, offset):
     db.execute("""
-        SELECT sender_id, content, sent_at
+        SELECT id
         FROM messages
         WHERE channel_id = ?
-        ORDER BY id
+        ORDER BY id DESC
         LIMIT 20 OFFSET ?
     """, (channelId, offset))
     results = db.fetchall()
@@ -255,7 +285,20 @@ def read_messages(channelId, offset):
     if not results:
         return []
 
-    return results
+    return list(reversed(results))
+
+def get_message_info(messageId):
+    db.execute("""
+        SELECT channel_id, sender_id, sent_at, content
+        FROM messages
+        WHERE id = ?
+    """, (messageId,))
+    result = db.fetchone()
+    # Imprimer pour debug mais gérer le cas None
+    print(result)
+    if not result:
+        return None
+    return result
 
 def get_channel_list():
     db.execute("""
@@ -270,4 +313,15 @@ def rename_channel(channelId, newName):
         SET name = ?
         WHERE id = ?;
     """, (newName, channelId,))
+    conn.commit()
+
+def change_password(userId, newPassword):
+    new_password_hash = password_hasher(newPassword)
+
+    db.execute("""
+        UPDATE users
+        SET password = ?
+        WHERE id = ?
+    """, (new_password_hash, userId))
+
     conn.commit()

@@ -14,20 +14,24 @@ Lexique:
 
 Client <-> Serveur:
     * PING: idem qu'en IRC, attend un PONG de la part de l'interlocuteur avant la fin du timeout, sert a déterminer la vitesse
-    PONG: Réponse donnée après un PING, doit etre envoyé au plus vite
+    * PONG: Réponse donnée après un PING, doit etre envoyé au plus vite
 
 Serveur -> Client:
     ASKLOGIN: Demande au client de se connecter
     ERROR erreur: Envoie une erreur au client
     WARNING avertissement: envoie un avertissement au client
     PRIVMSG username sender timestamp contenu_du_message: Envoie un message a l'utilisateur pour le salon privé donné
-    MSG salon sender timestamp contenu_du_message: Envoie un message a l'utilisateur pour le salon donné
+    * MSG salon sender timestamp contenu_du_message: Envoie un message a l'utilisateur pour le salon donné
     GETOUT utilisateur: force l'utilisateur a se deconnecter
-    SUCCESS: signifie la réussite de l'operation
-    USERID utilisateur id: donne l'id d'un utilisateur 
-    FRIEND id: donne l'id d'un ami
-    CHANNEL channel: donne le nom d'un channel
-    CHANUPDATE: demande de wipe la liste des channels car y'a une maj
+    * SUCCESS: signifie la réussite de l'operation
+    - USERID utilisateur id: donne l'id d'un utilisateur 
+    * FRIEND username: donne le nom d'un ami
+    * CHANNEL channel: donne le nom d'un channel
+    * COMMAND commande nombre d'arguments: Donne des infromations sur une commande 
+    * CHANUPDATE: demande de wipe la liste des channels car y'a une maj
+    * LOGGED utilisateur: signifie une reussite dans la connexion en donnant le nom d'utilisateur
+    * ASKEDYOU utilisateur: donne un utilisateur qui a demandé en ami
+    * YOUASKED utilisateur: donne un utilisateur qui a été demandé en ami
 
 Client -> Serveur:
     * USER utilisateur: Envoie un nom d'utilisateur au serveur pour se connecter ou s'inscrire
@@ -38,13 +42,16 @@ Client -> Serveur:
     * ASKFRIEND utilisateur: envoie une demande d'ami a un utilisateur, si une demande a été envoyée dans l'autre sens, elle sera acceptée
     * ACCEPTFRIEND utilisateur: accepte la demande d'ami d'un utilisateur
     * REJECTFRIEND utilisateur: refuse la demande d'ami d'un utilisateur
-    * FRIENDLIST: Affiche sa liste d'amis
+    * FRIENDLIST: demande sa liste d'amis
     * NEWPRIVMSG utilisateur message: envoie un message privé a un utilisateur
     * LISTPRIVMSG utilisateur offset: Demande la liste des messages du salon donné 
     * GETID: Retourne l'id de l'utilisateur
     * GETUSERID utilisateur: Retourne l'id d'un utilisateur
-    * USERNAME id: donne le nom d'utilisateur d'un utilisateur selon son id
-    * CHANNELLIST: donne la liste des channels
+    * USERNAME id: demande le nom d'utilisateur d'un utilisateur selon son id
+    * CHANNELLIST: demande la liste des channels
+    * PASSWORDEDIT password: change le mdp de l'utilisateur actuel
+    * FRIENDASKED: demande la liste des personnes ayant envoyé une demande d'ami
+    * ASKEDFRIEND: demande la liste des personnes qu'on a demandé en ami
 
     * LOGIN: Se connecte avec l'username/le mdp donnés
     * REGISTER: Crée un nouveau compte avc l'username/le mdp donnés

@@ -1,9 +1,11 @@
 import socket
 import asyncio
+import time
+
 import dbControl
 from classes import *
 
-def admin_command_runner(message):
+def admin_command_runner(userList, message):
     # Jsp ou le mettre....
     messageCommandList = {
         "NEWCHAN": {
@@ -34,19 +36,25 @@ def admin_command_runner(message):
     if len(args) != command["argsCount"]:
         dbControl.send_message(0, 0, "Nombre d'arguments invalide")
         return
-
+    
     command["function"](*args)
+
+    for x in userList:
+        try:
+            x.send("CHANUPDATE")
+        except:
+            pass
 
 
 def send_SUCCESS(user):
-    user.socket.send("SUCCESS".encode())
+    user.send("SUCCESS")
 
 def send_ERROR(user, message):
-    user.socket.send(("ERROR " + message).encode())
-    user.desactivate()
+    user.send(("ERROR " + message))
+    user.disconnect()
 
 def send_WARNING(user, message):
-    user.socket.send(("WARNING " + message).encode())
+    user.send(("WARNING " + message))
 
 def wrong_command(user):
     send_WARNING(user, "Commande inconnue")
@@ -55,13 +63,18 @@ def HELP(user, commandList):
     for name, x in commandList.items():
         if name == "wrong_command":
             continue
-        user.socket.send((name + ": " + str(x["argsCount"]) + " arguments attendus.\n").encode())
+        user.send(("COMMAND " + name + ": " + str(x["argsCount"]) + " arguments attendus."))
 
 def QUIT(user):
-    user.desactivate()
+    user.disconnect()
 
 def PING(user):
-    user.socket.send("PONG".encode())
+    user.send("PONG")
+
+def PONG(user):
+    if user.is_pingSended():
+        user.toggle_pingSended()
+        send_SUCCESS(user)
 
 def USER(user, username):
     if " " in username:
@@ -95,13 +108,12 @@ def LOGIN(user):
 
         user.set_tempUser("")
         user.set_tempPasswd("")
-        send_SUCCESS(user)
+        user.send("LOGGED " + user.get_username())
 
 def REGISTER(user):
     if user.get_tempUser() == "" or user.get_tempUser() == "":
         send_WARNING(user, "Nom d'utilisateur / mot de passe vide")
         return
-    print("get_ID: " + str(dbControl.get_user_id_by_username(user.get_tempUser())))
     if dbControl.get_user_id_by_username(user.get_tempUser()) != None:
         send_WARNING(user, "Nom d'utilisateur deja utilise")
         return
@@ -110,24 +122,20 @@ def REGISTER(user):
 
 def GETID(user):
     if user.get_id != None:
-        print(user.get_username())
-        print(user.get_id())
-        user.socket.send(("USERID " + user.get_username() + " " + str(user.get_id())).encode())
+        user.send(("USERID " + user.get_username() + " " + str(user.get_id())))
     else:
         send_WARNING(user, "Impossible de recuperer votre id")
 
 def GETUSERID(user, utilisateur):
     userId = dbControl.get_user_id_by_username(utilisateur)
     if userId != None:
-        user.socket.send(("USERID " + utilisateur + " " + str(userId)).encode())
+        user.send(("USERID " + utilisateur + " " + str(userId)))
     else:
         send_WARNING(user, "Impossible de recuperer l'id de l'utilisateur: " + utilisateur)
 
-def ASKFRIEND(user, utilisateur):
+def ASKFRIEND(userList, user, utilisateur):
     userId = user.get_id()
     friendId = dbControl.get_user_id_by_username(utilisateur)
-
-    print("\n",user.get_username(),"("+str(userId)+") demande ",utilisateur,"("+str(friendId)+") en ami")
 
     if userId == friendId:
         send_WARNING(user, "Vous ne pouvez pas vous demander en ami")
@@ -144,22 +152,24 @@ def ASKFRIEND(user, utilisateur):
     
     if not friendshipId:
         friendshipId = dbControl.get_friendship_id_by_ids(friendId, userId)
-    
-    print("l'id de friendship est:",friendshipId)
 
     if friendshipId == None:
-        print("l'id est nul, on crée la requete")
         dbControl.make_friend_request(userId, friendId)
         send_SUCCESS(user)
+        user.send("YOUASKED " + utilisateur)
+        for x in userList:
+            if x.get_id() == friendId:
+                x.send("ASKEDYOU " + user.get_username())
     else:
         if dbControl.is_friendship_pending(friendshipId):
-            print(user.get_username(),"a deja fait une demande d'ami")
             if dbControl.who_asked_friendship(userId, friendId) == friendId:
-                print(utilisateur,"a deja fait une demande d'ami, on accepte")
                 privChanId = dbControl.new_channel("PRIVATE-" + str(userId) + "-" + str(friendId), True)
-                print("Le channel privé a pour id: "+ str(privChanId))
                 dbControl.accept_friendship(friendshipId, privChanId)
                 send_SUCCESS(user)
+                user.send("FRIEND " + utilisateur)
+                for x in userList:
+                    if x.get_id() == friendId:
+                        x.send("FRIEND " + user.get_username())
             else:
                 send_WARNING(user, "Vous avez deja demande cette personne en ami")
         else:
@@ -196,10 +206,30 @@ def REJECTFRIEND(user, utilisateur):
 
 def FRIENDLIST(user):
     userId = user.get_id()
-    for x in dbControl.list_friendships_ids(userId):
-        friendship = dbControl.get_user_id_by_friendship(x)
-        # C'est un ptn de monolithe, a opti
-        user.socket.send(("FRIEND " + str(friendship[friendship.index(userId) - 1])).encode())
+    if userId == None:
+        send_WARNING(user, "Impossible de récuperer votre identifiant")
+        return
+
+    friendships = dbControl.list_friendships_ids(userId)
+    if friendships == None:
+        return
+
+    for friendship_id in friendships:
+        if dbControl.is_friendship_pending(friendship_id):
+            continue
+        friendshipIds = dbControl.get_user_id_by_friendship(friendship_id)
+        if not friendshipIds:
+            continue
+        try:
+            if friendshipIds[0] == userId:
+                friendId = friendshipIds[1]
+            else:
+                friendId = friendshipIds[0]
+            friendUsername = dbControl.get_username_by_user_id(friendId)
+            user.send(("FRIEND " + friendUsername))
+        except Exception:
+            continue
+
 
 def USERNAME(user, userId):
     try:
@@ -211,9 +241,9 @@ def USERNAME(user, userId):
     if username == None:
         send_WARNING(user, "Impossible de trouver l'utilisateur")
     else:
-        user.socket.send(("USERID " + username + " " + str(userId)).encode())
+        user.send(("USERID " + username + " " + str(userId)))
 
-def NEWMSG(user, channel, content):
+def NEWMSG(userList, user, channel, content):
     userId = user.get_id()
 
     if channel == "commands" and (not dbControl.check_mod_by_username(user.get_username())):
@@ -223,11 +253,26 @@ def NEWMSG(user, channel, content):
     channelId = dbControl.get_channel_id_by_name(channel)
     if userId == None:
         send_WARNING(user, "Vous n'etes pas connecte")
-    dbControl.send_message(userId, channelId, content)
-    send_SUCCESS(user)
-    if channel == "commands": admin_command_runner(content)
+    message = dbControl.send_message(userId, channelId, content)
+    # send_SUCCESS(user)
+
+    username = user.get_username()
+    msgInfo = dbControl.get_message_info(message)
+    for x in userList:
+        try:    
+            if x.get_id() == user.get_id():
+                continue
+            # Vérifier que msgInfo est valide avant d'accéder aux indices
+            if not msgInfo or len(msgInfo) < 4:
+                continue
+            #MSG salon sender timestamp contenu_du_message
+            x.send(" ".join(["MSG", channel, username, msgInfo[2].replace(" ","_"), content]))
+        except:
+            pass
+    if channel == "commands": admin_command_runner(userList, content)
 
 def LISTMSG(user, channel, offset):
+    print("Demande de lecture sur", channel)
     try:
         offset = int(offset)
     except:
@@ -239,14 +284,18 @@ def LISTMSG(user, channel, offset):
         send_WARNING(user, "Le channel " + channel + " est introuvable")
 
     msgList = dbControl.read_messages(channelId, offset)
+    for row in msgList:
+        # row peut être (id,) ou directement un id selon l'appelant
+        message_id = row[0] if isinstance(row, (list, tuple)) else row
+        msgInfo = dbControl.get_message_info(message_id)
+        if not msgInfo or len(msgInfo) < 4:
+            continue
+        senderName = dbControl.get_username_by_user_id(msgInfo[1])
+        timestamp = msgInfo[2].replace(" ","_")
+        content = msgInfo[3]
+        user.send(" ".join(["MSG", channel, senderName, timestamp, content]))
 
-    for x in msgList:
-        username = dbControl.get_username_by_user_id(x[0])
-        content = x[1]
-        timestamp = x[2].replace(" ","_")
-        user.socket.send(("MSG " + channel + " " + username + " " + timestamp + " " + content).encode())
-
-def NEWPRIVMSG(user, username, message):
+def NEWPRIVMSG(userList, user, username, content):
     userId = user.get_id()
     if userId == None:
         send_WARNING(user, "Vous n'etes pas connecte")
@@ -267,8 +316,22 @@ def NEWPRIVMSG(user, username, message):
         send_WARNING(user, "Impossible de trouver le canal prive")
         return
     
-    dbControl.send_message(userId, privateChannelId, message)
+    message = dbControl.send_message(userId, privateChannelId, content)
     send_SUCCESS(user)
+    username = user.get_username()
+    msgInfo = dbControl.get_message_info(message)
+    for x in userList:
+        try:
+            if x.get_id() == user.get_id():
+                continue
+            if not x.get_id() == friendId:
+                continue
+            if not msgInfo or len(msgInfo) < 4:
+                continue
+            #MSG salon sender timestamp contenu_du_message
+            x.send(" ".join(["PRIVMSG", username, username, msgInfo[2].replace(" ","_"), content]))
+        except Exception as e:
+            send_WARNING(user, e)
 
 def LISTPRIVMSG(user, username, offset):
     userId = user.get_id()
@@ -294,21 +357,61 @@ def LISTPRIVMSG(user, username, offset):
         send_WARNING(user, "Le channel prive associe a " + username + " est introuvable")
 
     msgList = dbControl.read_messages(channelId, offset)
-
-    for x in msgList:
-        sender = dbControl.get_username_by_user_id(x[0])
-        content = x[1]
-        timestamp = x[2].replace(" ","_")
-        user.socket.send(("PRIVMSG " + username + " " + sender + " " + timestamp + " " + content).encode())
+    for row in msgList:
+        message_id = row[0] if isinstance(row, (list, tuple)) else row
+        msgInfo = dbControl.get_message_info(message_id)
+        if not msgInfo or len(msgInfo) < 4:
+            continue
+        sender = dbControl.get_username_by_user_id(msgInfo[1])
+        timestamp = msgInfo[2].replace(" ","_")
+        content = msgInfo[3]
+        print("J'aimerais envoyer:", ("PRIVMSG " + username + " " + sender + " " + timestamp + " " + content))
+        user.send(("PRIVMSG " + username + " " + sender + " " + timestamp + " " + content))
 
 def CHANNELLIST(user):
     if dbControl.check_mod_by_username(user.get_username()):
-        user.socket.send("CHANNEL commands".encode())
-    isCommandChannel = False
+        user.send("CHANNEL commands")
     for x in dbControl.get_channel_list():
         if x[1] == "commands": continue
         if x[2] == 0:
-            user.socket.send(("CHANNEL " + x[1]).encode())
+            user.send(("CHANNEL " + x[1]))
+
+def PASSWORDEDIT(user, newPassword):
+    dbControl.change_password(user.get_id(), newPassword)
+    send_SUCCESS(user)
+
+def FRIENDASKED(user):
+    userId = user.get_id()
+    askedList = dbControl.list_friendships_ids(userId)
+    if askedList == None:
+        return
+    for friendship in askedList:
+        if dbControl.is_friendship_pending(friendship):
+            friendshipIds = dbControl.get_user_id_by_friendship(friendship)
+            # [0] c'est l'id de l'initiateur
+            if friendshipIds[0] != userId:
+                continue
+            friendName = dbControl.get_username_by_user_id(friendshipIds[1])
+            user.send("YOUASKED " + friendName)
+
+def ASKEDFRIEND(user):
+    userId = user.get_id()
+    askedList = dbControl.list_friendships_ids(userId)
+    if askedList == None:
+        return
+    for friendship in askedList:
+        if dbControl.is_friendship_pending(friendship):
+            friendshipIds = dbControl.get_user_id_by_friendship(friendship)
+            # [0] c'est l'id de l'initiateur
+            if friendshipIds[1] != userId:
+                continue
+            friendName = dbControl.get_username_by_user_id(friendshipIds[0])
+            user.send("ASKEDYOU " + friendName)
+
+    #ASKEDYOU utilisateur: donne un utilisateur qui a demandé en ami
+    #YOUASKED utilisateur: donne un utilisateur qui a été demandé en ami
+    #FRIENDASKED: demande la liste des personnes ayant envoyé une demande d'ami
+    #ASKEDFRIEND: demande la liste des personnes qu'on a demandé en ami
 
 # ---------- Commandes modérateur ---------- #
 
@@ -397,12 +500,21 @@ commandList = {
     },
     "ASKFRIEND": {
         "function": ASKFRIEND,
-        "argsCount": 1
+        "argsCount": 1,
+        "needUserList": True
     },
     # Oui en fait ca fait sensiblement la meme chose
     "ACCEPTFRIEND": {
         "function": ASKFRIEND,
         "argsCount": 1
+    },
+    "FRIENDASKED": {
+        "function": FRIENDASKED,
+        "argsCount": 0
+    },
+    "ASKEDFRIEND": {
+        "function": ASKEDFRIEND,
+        "argsCount": 0
     },
     "REJECTFRIEND": {
         "function": REJECTFRIEND,
@@ -418,7 +530,8 @@ commandList = {
     },
     "NEWMSG": {
         "function": NEWMSG,
-        "argsCount": 2
+        "argsCount": 2,
+        "needUserList": True
     },
     "LISTMSG": {
         "function": LISTMSG,
@@ -426,7 +539,8 @@ commandList = {
     },
     "NEWPRIVMSG": {
         "function": NEWPRIVMSG,
-        "argsCount": 2
+        "argsCount": 2,
+        "needUserList": True
     },
     "LISTPRIVMSG": {
         "function": LISTPRIVMSG,
@@ -435,14 +549,13 @@ commandList = {
     "CHANNELLIST": {
         "function": CHANNELLIST,
         "argsCount": 0
+    },
+    "PONG": {
+        "function": PONG,
+        "argsCount": 0
+    },
+    "PASSWORDEDIT": {
+        "function": PASSWORDEDIT,
+        "argsCount": 1
     }
 }
-
-
-
-
-
-
-
-
-#PROCHAINE ETAPE: LE CLIENT !!!!!!!!
