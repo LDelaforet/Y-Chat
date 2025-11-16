@@ -1,0 +1,65 @@
+Principe :
+Le protocole YCP est un protocole proche d’IRC mais comportant quelques différences, principalement pour faciliter la compréhension.
+A chaque connexion, l’utilisateur peut récupérer les messages d’un salon. Les messages sont généralement récupérés par groupes de 20.
+
+Chaque serveur possède un salon de commandes destiné uniquement aux modérateurs et administrateurs.
+
+Un compte administrateur doit être spécifié ; il est essentiel pour la modération. Un administrateur peut promouvoir des utilisateurs en modérateurs.
+
+Lexique :
+    Erreur : Problème fatal, entraîne la fermeture de la connexion.
+    Avertissement : Problème non fatal, pouvant être corrigé.
+
+Commandes Client <-> Serveur :
+    PING : Identique à IRC, attend un PONG avant le timeout pour mesurer la latence.
+    PONG : Réponse immédiate donnée après un PING.
+
+Serveur -> Client :
+    ASKLOGIN : Demande au client de se connecter.
+    ERROR erreur : Envoie une erreur au client.
+    WARNING avertissement : Envoie un avertissement au client.
+    PRIVMSG username sender timestamp contenu_du_message : Message privé reçu.
+    MSG salon sender timestamp contenu_du_message : Message reçu dans un salon public.
+    GETOUT utilisateur : Force un utilisateur à se déconnecter.
+    SUCCESS : Indique la réussite d’une opération.
+    USERID utilisateur id : Donne l’ID d’un utilisateur.
+    FRIEND username : Envoie le nom d’un ami.
+    CHANNEL channel : Envoie le nom d’un channel.
+    COMMAND commande nombre_d_arguments : Donne des informations sur une commande.
+    CHANUPDATE : Demande de réinitialiser la liste des channels (mise à jour).
+    LOGGED utilisateur : Indique une connexion réussie.
+    ASKEDYOU utilisateur : Indique qu’un utilisateur vous a envoyé une demande d’ami.
+    YOUASKED utilisateur : Indique un utilisateur que vous avez demandé en ami.
+
+Client -> Serveur :
+    USER utilisateur : Envoie le nom d'utilisateur pour connexion/inscription.
+    PASS mot_de_passe : Envoie le mot de passe pour connexion/inscription.
+    NEWMSG salon contenu_du_message : Envoie un message dans un salon public.
+    LISTMSG salon offset : Demande la liste des messages d’un salon public.
+    QUIT : Ferme la connexion côté client.
+    ASKFRIEND utilisateur : Envoie une demande d’ami (réception inverse = acceptation).
+    ACCEPTFRIEND utilisateur : Accepte une demande d’ami.
+    REJECTFRIEND utilisateur : Refuse une demande d’ami.
+    FRIENDLIST : Demande la liste d’amis.
+    NEWPRIVMSG utilisateur message : Envoie un message privé.
+    LISTPRIVMSG utilisateur offset : Demande la liste des messages privés.
+    GETID : Retourne l’ID de l’utilisateur actuel.
+    GETUSERID utilisateur : Retourne l’ID d’un utilisateur.
+    USERNAME id : Demande le nom d’utilisateur associé à un ID.
+    CHANNELLIST : Demande la liste des channels.
+    PASSWORDEDIT password : Change le mot de passe du compte connecté.
+    FRIENDASKED : Demande la liste des personnes ayant envoyé une demande d’ami.
+    ASKEDFRIEND : Demande la liste des personnes demandées en ami.
+    LOGIN : Connexion avec USER/PASS.
+    REGISTER : Création d’un compte avec USER/PASS.
+
+Administrateur -> Salon commandes :
+    PROMOTE utilisateur : Promeut un utilisateur au rang de modérateur.
+    UNPROMOTE utilisateur : Retire le rôle de modérateur.
+    WIPEMODS : Retire toutes les permissions des modérateurs.
+
+Modérateur -> Salon commandes :
+    NEWCHAN nom : Crée un nouveau salon.
+    RENCHAN ancien_nom nouveau_nom : Renomme un salon.
+    DELCHAN nom : Supprime un salon.
+    WIPECHAN nom : Supprime tous les messages d’un salon.
